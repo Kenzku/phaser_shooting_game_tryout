@@ -3,4 +3,5 @@ Build your HTML 5 games with phaser, http://codeperfectionist.com/articles/phase
 
 # Start
 cd phaser_shooting_game_tryout
+
 node ./bin/www
