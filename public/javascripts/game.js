@@ -6,6 +6,7 @@
 var game;
 var player;
 var greenEnemies;
+var blueEnemies;
 var starfield;
 var cursors;
 var bank;
@@ -19,7 +20,8 @@ var bulletTimer = 0;
 var shields;
 var score = 0;
 var scoreText;
-var greenEnemyLauchTimer;
+var greenEnemyLaunchTimer;
+var blueEnemyLaunchTimer;
 var gameOver;
 
 var ACCELERATION = 600;
@@ -81,6 +83,48 @@ function launchGreenEnemy() {
     game.time.events.add(game.rnd.integerInRange(MIN_ENEMY_SPACING, MAX_ENEMY_SPACING), launchGreenEnemy);
 }
 
+function launchBlueEnemy() {
+    "use strict";
+    var startingX = game.rnd.integerInRange(100, game.width - 100),
+        verticalSpeed = 180,
+        spread = 60,
+        frequency = 70,
+        verticalSpacing = 70,
+        numEnmiesInWave = 5,
+        timeBetweenWaves = 7000,
+        i,
+        enemy;
+    function enemyUpdate() {
+        // Wave movement
+        this.body.x = this.startingX + Math.sin((this.y) / frequency) * spread;
+
+        // Squish and rotate ship for illusion of "banking"
+        bank = Math.cos((this.y + 60) / frequency);
+        this.scale.x = 0.5 - Math.abs(bank) / 8;
+        this.angle = 180 - bank * 2;
+
+        // Kill enemies once they go off screen
+        if (this.y > game.height + 200) {
+            this.kill();
+        }
+    }
+    // Launch wave
+    for (i = 0; i < numEnmiesInWave; i = i + 1) {
+        enemy = blueEnemies.getFirstExists(false);
+        if (enemy) {
+            enemy.startingX = startingX;
+            enemy.reset(game.width / 2, -verticalSpacing * i);
+            enemy.body.velocity.y = verticalSpeed;
+
+            // Update function for each enemy
+            enemy.update = enemyUpdate;
+        }
+    }
+
+    // Send another wave soon
+    blueEnemyLaunchTimer = game.time.events.add(timeBetweenWaves, launchBlueEnemy);
+}
+
 function addEnemyEmitterTrail(enemy) {
     "use strict";
     var enemyTrail = game.add.emitter(enemy.x, player.y - 10, 100);
@@ -127,8 +171,10 @@ function preload() {
     game.load.image('starfield', '/assets/starfield.png');
     game.load.image('ship', '/assets/player.png');
     game.load.image('bullet', '/assets/bullet.png');
-    game.load.image('enemy-green', 'assets/enemy-green.png');
+    game.load.image('enemy-green', '/assets/enemy-green.png');
+    game.load.image('enemy-blue', '/assets/enemy-blue.png');
     game.load.spritesheet('explosion', 'assets/explode.png', 128, 128);
+    game.load.bitmapFont('spacefont', '/assets/spacefont/spacefont.png', '/assets/spacefont/spacefont.xml');
 }
 
 function create() {
@@ -187,6 +233,23 @@ function create() {
 
     //launchGreenEnemy();
     game.time.events.add(1000, launchGreenEnemy);
+
+    // Blue enemies
+    blueEnemies = game.add.group();
+    blueEnemies.enableBody = true;
+    blueEnemies.physicsBodyType = Phaser.Physics.ARCADE;
+    blueEnemies.createMultiple(30, 'enemy-blue');
+    blueEnemies.setAll('anchor.x', 0.5);
+    blueEnemies.setAll('anchor.y', 0.5);
+    blueEnemies.setAll('scale.x', 0.5);
+    blueEnemies.setAll('scale.y', 0.5);
+    blueEnemies.setAll('angle', 180);
+    blueEnemies.forEach(function (enemy) {
+        enemy.damageAmount = 40;
+    });
+
+    game.time.events.add(1000, launchBlueEnemy);
+
     // And some controls to play the game with
     cursors = game.input.keyboard.createCursorKeys();
     fireButton = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
@@ -214,24 +277,36 @@ function create() {
     });
 
     // Shields stat
-    shields = game.add.text(game.world.width - 150,
-        10,
-        'Shields: ' + player.health + '%',
-        {font: '20px Arial', fill: '#fff'});
+    // still font
+    //shields = game.add.text(game.world.width - 150,
+    //    10,
+    //    'Shields: ' + player.health + '%',
+    //    {font: '20px Arial', fill: '#fff'});
+    // bitmap font
+    shields = game.add.bitmapText(game.world.width - 250, 10, 'spacefont', player.health + '%', 50);
+
     shields.render = function () {
         shields.text = 'Shields: ' + Math.max(player.health, 0) + '%';
     };
 
+    shields.render();
+
     // Score
-    scoreText = game.add.text(10, 10, '', {font: '20px Arial', fill: '#fff'});
+    // still font
+    //scoreText = game.add.text(10, 10, '', {font: '20px Arial', fill: '#fff'});
+    scoreText = game.add.bitmapText(10, 10, 'spacefont', '', 50);
     scoreText.render = function () {
         scoreText.text = 'Score: ' + score;
     };
     scoreText.render();
 
     // Game over text
-    gameOver = game.add.text(game.world.centerX, game.world.centerY, 'GAME OVER!', {font: '84px Arial', fill: '#fff'});
-    gameOver.anchor.setTo(0.5, 0.5);
+    // still font
+    //gameOver = game.add.text(game.world.centerX, game.world.centerY, 'GAME OVER!', {font: '84px Arial', fill: '#fff'});
+    //gameOver.anchor.setTo(0.5, 0.5);
+    gameOver = game.add.bitmapText(game.world.centerX, game.world.centerY, 'spacefont', 'GAME OVER!', 110);
+    gameOver.x = gameOver.x - gameOver.textWidth / 2;
+    gameOver.y = gameOver.y - gameOver.textHeight / 3;
     gameOver.visible = false;
 }
 
@@ -243,8 +318,11 @@ function update() {
     function restart() {
         // Reset the enemies
         greenEnemies.callAll('kill');
-        game.time.events.remove(greenEnemyLauchTimer);
+        game.time.events.remove(greenEnemyLaunchTimer);
         game.time.events.add(1000, launchGreenEnemy);
+
+        blueEnemies.callAll('kill');
+        game.time.events.remove(blueEnemyLaunchTimer);
 
         // Revive the player
         player.revive();
@@ -320,6 +398,9 @@ function update() {
     // Check collisions
     game.physics.arcade.overlap(player, greenEnemies, shipCollide, null, this);
     game.physics.arcade.overlap(greenEnemies, bullets, hitEnemy, null, this);
+
+    game.physics.arcade.overlap(player, blueEnemies, shipCollide, null, this);
+    game.physics.arcade.overlap(bullets, blueEnemies, hitEnemy, null, this);
 
     // Game Over?
     if (!player.alive && gameOver.visible === false) {
