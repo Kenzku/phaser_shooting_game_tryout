@@ -13,6 +13,7 @@ var bank;
 var shipTrail;
 var explosions;
 var bullets;
+var blueEnemyBullets;
 var fireButton;
 var tapRestart;
 var spaceRestart;
@@ -27,6 +28,18 @@ var gameOver;
 var ACCELERATION = 600;
 var DRAG = 400;
 var MAX_SPEED = 400;
+
+function enemyHitsPlayer(player, bullet) {
+    "use strict";
+    var explosion = explosions.getFirstExists(false);
+    explosion.reset(player.body.x + player.body.halfWidth, player.body.halfHeight);
+    explosion.alpha = 0.7;
+    explosion.play('explosion', 30, false, true);
+    bullet.kill();
+
+    player.damage(bullet.damageAmount);
+    shields.render();
+}
 
 function hitEnemy(enemy, bullet) {
     "use strict";
@@ -93,7 +106,11 @@ function launchBlueEnemy() {
         numEnmiesInWave = 5,
         timeBetweenWaves = 7000,
         i,
-        enemy;
+        enemy,
+        enemyBullet,
+        firingDelay = 2000,
+        bulletSpeed = 400,
+        angle;
     function enemyUpdate() {
         // Wave movement
         this.body.x = this.startingX + Math.sin((this.y) / frequency) * spread;
@@ -103,9 +120,25 @@ function launchBlueEnemy() {
         this.scale.x = 0.5 - Math.abs(bank) / 8;
         this.angle = 180 - bank * 2;
 
+        // Fire
+        enemyBullet = blueEnemyBullets.getFirstExists(false);
+        if (enemyBullet &&
+                this.alive &&
+                this.bullets &&
+                this.y > game.width / 8 &&
+                game.time.now > firingDelay + this.lastShot) {
+            this.lastShot = game.time.now;
+            this.bullets = this.bullets - 1;
+            enemyBullet.reset(this.x, this.y + this.height / 2);
+            enemyBullet.damageAmount = this.damageAmount;
+            angle = game.physics.arcade.moveToObject(enemyBullet, player, bulletSpeed);
+            enemyBullet.angle = game.math.radToDeg(angle);
+        }
+
         // Kill enemies once they go off screen
         if (this.y > game.height + 200) {
             this.kill();
+            this.y = -20;
         }
     }
     // Launch wave
@@ -116,6 +149,9 @@ function launchBlueEnemy() {
             enemy.reset(game.width / 2, -verticalSpacing * i);
             enemy.body.velocity.y = verticalSpeed;
 
+            // set up firing
+            enemy.bullets = 1;
+            enemy.lastShot = 0;
             // Update function for each enemy
             enemy.update = enemyUpdate;
         }
@@ -173,6 +209,7 @@ function preload() {
     game.load.image('bullet', '/assets/bullet.png');
     game.load.image('enemy-green', '/assets/enemy-green.png');
     game.load.image('enemy-blue', '/assets/enemy-blue.png');
+    game.load.image('blueEnemyBullet', '/assets/enemy-blue-bullet.png');
     game.load.spritesheet('explosion', 'assets/explode.png', 128, 128);
     game.load.bitmapFont('spacefont', '/assets/spacefont/spacefont.png', '/assets/spacefont/spacefont.xml');
 }
@@ -192,6 +229,20 @@ function create() {
     bullets.setAll('outOfBoundsKill', true);
     bullets.setAll('checkWorldBounds', true);
 
+    // Blue enemy's bullets
+    blueEnemyBullets = game.add.group();
+    blueEnemyBullets.enableBody = true;
+    blueEnemyBullets.physicsBodyType = Phaser.Physics.ARCADE;
+    blueEnemyBullets.createMultiple(30, 'blueEnemyBullet');
+    blueEnemyBullets.callAll('crop', null, {x: 90, y: 0, width: 90, height: 70});
+    blueEnemyBullets.setAll('alpha', 0.9);
+    blueEnemyBullets.setAll('anchor.x', 0.5);
+    blueEnemyBullets.setAll('anchor.y', 0.5);
+    blueEnemyBullets.setAll('outOfBoundsKill', true);
+    blueEnemyBullets.setAll('checkBoundsKill', true);
+    blueEnemyBullets.forEach(function (enemy) {
+        enemy.body.setSize(20, 20);
+    });
     //  The hero!
     player = game.add.sprite(400, 500, 'ship');
     player.health = 100;
@@ -320,6 +371,7 @@ function update() {
         greenEnemies.callAll('kill');
         game.time.events.remove(greenEnemyLaunchTimer);
         game.time.events.add(1000, launchGreenEnemy);
+        blueEnemyBullets.callAll('kill');
 
         blueEnemies.callAll('kill');
         game.time.events.remove(blueEnemyLaunchTimer);
@@ -402,6 +454,7 @@ function update() {
     game.physics.arcade.overlap(player, blueEnemies, shipCollide, null, this);
     game.physics.arcade.overlap(bullets, blueEnemies, hitEnemy, null, this);
 
+    game.physics.arcade.overlap(blueEnemyBullets, player, enemyHitsPlayer, null, this);
     // Game Over?
     if (!player.alive && gameOver.visible === false) {
         gameOver.visible = true;
